@@ -1,6 +1,6 @@
 name: CI
 
-# Allow SARIF upload to create findings in GitHub (optional; used below)
+# Allow SARIF upload to create findings in GitHub
 permissions:
   contents: read
   security-events: write
@@ -44,10 +44,10 @@ jobs:
           name: trivy-results
           path: trivy-results.sarif
 
-      # Optional: upload SARIF to GitHub Code Scanning so results appear in Security → Code scanning
-      - name: Upload Trivy SARIF to GitHub Code Scanning (optional)
+      # Upload SARIF to GitHub Code Scanning
+      - name: Upload Trivy SARIF to GitHub Code Scanning
         if: always()
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
 
@@ -73,10 +73,18 @@ jobs:
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy image --format sarif --output scout-results.sarif pygoat_app:latest
+            -v ${{ github.workspace }}:/app \
+            aquasec/trivy image --format sarif --output /app/scout-results.sarif pygoat_app:latest
 
       - name: Upload Image Scan SARIF artifact
         uses: actions/upload-artifact@v4.4.3
         with:
           name: scout-results
           path: scout-results.sarif
+
+      # Upload both SARIF files to GitHub Code Scanning
+      - name: Upload all SARIF results to GitHub Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif,scout-results.sarif
