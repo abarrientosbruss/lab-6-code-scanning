@@ -46,7 +46,7 @@ jobs:
 
       # Optional: upload SARIF to GitHub Code Scanning so results appear in Security → Code scanning
       - name: Upload Trivy SARIF to GitHub Code Scanning (optional)
-        if: always() && steps
+        if: always()
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: trivy-results.sarif
