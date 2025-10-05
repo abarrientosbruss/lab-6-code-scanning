@@ -1,54 +1,82 @@
 name: CI
 
+# Allow SARIF upload to create findings in GitHub (optional; used below)
+permissions:
+  contents: read
+  security-events: write
+
 on:
-push:
-branches:
-- main
-pull_request:
-branches:
-- main
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-sast_scan:
-name: Run Static Code Scan
-runs-on: ubuntu-latest
-steps:
-- name: Checkout code
-uses: actions/checkout@v4
+  sast_scan:
+    name: Run Static Code Scan
+    runs-on: ubuntu-latest
 
-  - name: Set up Python
-    uses: actions/setup-python@v4
-    with:
-      python-version: '3.8'
-      
-  - name: Run Trivy vulnerability scanner in repo mode
-    uses: aquasecurity/trivy-action@0.28.0
-    env:
-      TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
-    with:
-      scan-type: 'fs'
-      ignore-unfixed: true
-      format: 'sarif'
-      output: 'trivy-results.sarif'
-      severity: 'CRITICAL'
-      
-  - name: Upload Trivy SARIF results as build artifact
-    uses: actions/upload-artifact@v4.4.3
-    with:
-      name: trivy-results
-      path: trivy-results.sarif
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-image_scan:
-name: Build Image and Run Image Scan
-runs-on: ubuntu-latest
-steps:
-- name: Checkout code
-uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
 
-  - name: Set up Docker
-    uses: docker-practice/actions-setup-docker@v1
-    with:
-      docker_version: '20.10.7'
+      - name: Run Trivy vulnerability scanner in repo mode
+        uses: aquasecurity/trivy-action@0.28.0
+        env:
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL'
 
-  - name: Build Docker Image
-    run: docker build -f Dockerfile -t pygoat_app:latest .
+      - name: Upload Trivy SARIF results as build artifact
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: trivy-results
+          path: trivy-results.sarif
+
+      # Optional: upload SARIF to GitHub Code Scanning so results appear in Security → Code scanning
+      - name: Upload Trivy SARIF to GitHub Code Scanning (optional)
+        if: always() && steps
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: trivy-results.sarif
+
+  image_scan:
+    name: Build Image and Run Image Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: docker build -f Dockerfile -t pygoat_app:latest .
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Run Trivy image scan and generate SARIF
+        env:
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy image --format sarif --output scout-results.sarif pygoat_app:latest
+
+      - name: Upload Image Scan SARIF artifact
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: scout-results
+          path: scout-results.sarif
