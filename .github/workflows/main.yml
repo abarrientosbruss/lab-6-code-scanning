@@ -44,6 +44,7 @@ jobs:
           name: trivy-results
           path: trivy-results.sarif
 
+      # Upload results to GitHub Code Scanning tab
       - name: Upload Trivy SARIF to GitHub Code Scanning
         if: always()
         uses: github/codeql-action/upload-sarif@v3
@@ -76,7 +77,7 @@ jobs:
         env:
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
         run: |
-          # This volume mount ensures the output is saved to the host runner's workspace.
+          # Ensure results are saved to the host runner’s workspace
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v ${{ github.workspace }}:/app \
@@ -91,9 +92,9 @@ jobs:
           name: scout-results
           path: scout-results.sarif
 
+      # Upload image scan results to GitHub Security tab
       - name: Upload Image Scan SARIF to GitHub Code Scanning
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: scout-results.sarif
-
