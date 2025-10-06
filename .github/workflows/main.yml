@@ -41,14 +41,15 @@ jobs:
       - name: Upload Trivy SARIF results as build artifact
         uses: actions/upload-artifact@v4.4.3
         with:
-          sarif_file: trivy-results.sarif
+          name: trivy-results
+          path: trivy-results.sarif
 
-      # Optional: upload SARIF to GitHub Code Scanning
-      - name: Upload Trivy SARIF to GitHub Code Scanning (optional)
+      # Upload Trivy SARIF to GitHub Code Scanning
+      - name: Upload Trivy SARIF to GitHub Code Scanning
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: scout_report.sarif
+          sarif_file: trivy-results.sarif
 
   image_scan:
     name: Build Docker Image and Run Docker Scout Scan
@@ -59,31 +60,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Docker
+        uses: docker-practice/actions-setup-docker@v1
+        with:
+          docker_version: '20.10.7'
+
       - name: Build Docker Image
         run: docker build -f Dockerfile -t pygoat_app:latest .
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+      - name: Docker Scout Scan
+        uses: docker/scout-action@v1.15.0
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          command: quickview,cves
+          only-severities: critical,high
+          sarif-file: scout-report.sarif
 
-      - name: Run Trivy image scan and generate SARIF
-        env:
-          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
-        run: |
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            -v ${{ github.workspace }}:/app \
-            aquasec/trivy image --format sarif --output /app/scout-results.sarif pygoat_app:latest
-      - name: Upload Image Scan SARIF artifact
-        uses: actions/upload-artifact@v4.4.3
+      - name: Upload Docker Scout SARIF artifact
+        uses: actions/upload-artifact@v3
+        if: always()
         with:
-          name: scout-results
-          path: scout-results.sarif
+          name: docker-scout-findings
+          path: scout-report.sarif
 
-      # Upload both SARIF files to GitHub Code Scanning
-      - name: Upload all SARIF results to GitHub Code Scanning
+      # Upload Docker Scout SARIF to GitHub Code Scanning
+      - name: Upload Docker Scout SARIF to GitHub Code Scanning
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: trivy-results.sarif,scout-results.sarif
+          sarif_file: scout-report.sarif
